@@ -1,0 +1,3 @@
+[submodule "friscy"]
+	path = friscy
+	url = https://github.com/maceip/friscy.git

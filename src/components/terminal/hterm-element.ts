@@ -1,5 +1,7 @@
 import htermScriptUrl from "hterm/dist/amd/lib/hterm.amd.js?url";
 import { bootFriscy, type FriscyRuntime } from "./friscy-client";
+import { ensureHighlighterReady, highlightCodeFence } from "./shiki-ansi";
+import { multiplicityController } from "./multiplicity-controller";
 
 type HtermModule = {
   Terminal: new (options?: any) => any;
@@ -24,6 +26,100 @@ type TerminalInstance = {
 
 const ELEMENT_NAME = "stare-terminal";
 
+const CODE_FENCE_REGEX = /```(\\w+)?\\n([\\s\\S]*?)```/g;
+const CODE_FENCE_DETECT = /```(\\w+)?\\n([\\s\\S]*?)```/;
+
+ensureHighlighterReady();
+
+type ShikiMode = "auto" | "force" | "off";
+const normalizeShikiMode = (value: string | null): ShikiMode => {
+  if (value === "force") return "force";
+  if (value === "off") return "off";
+  return "auto";
+};
+
+const DEFAULT_HIGHLIGHT_PATTERNS: Array<{
+  name: string;
+  regex: RegExp;
+  color: string;
+  underline?: boolean;
+}> = [
+  {
+    name: "url",
+    regex: /https?:\/\/[^^\s<>()]+/g,
+    color: "56,189,248",
+    underline: true,
+  },
+  {
+    name: "path",
+    regex:
+      /(?<!https?:)\b(?:~\/|\.?\/)[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+\/?/g,
+    color: "129,230,217",
+  },
+];
+
+const renderCodeFences = (text: string) => {
+  CODE_FENCE_REGEX.lastIndex = 0;
+  return text.replace(CODE_FENCE_REGEX, (_match, lang = "plaintext", code) => {
+    const normalized = lang.trim() || "plaintext";
+    const highlighted = highlightCodeFence(code, normalized);
+    return `
+${highlighted}
+`;
+  });
+};
+
+const hasCodeFence = (text: string) => CODE_FENCE_DETECT.test(text);
+
+const applyHighlight = (text: string) => {
+  const patterns =
+    (window as any).__STARE_HIGHLIGHT_PATTERNS__ || DEFAULT_HIGHLIGHT_PATTERNS;
+  if (!patterns || patterns.length === 0) return text;
+
+  const ansiRegex = /\[[0-9;]*m/g;
+  const segments: Array<{ ansi: boolean; value: string }> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = ansiRegex.exec(text))) {
+    if (match.index > lastIndex) {
+      segments.push({
+        ansi: false,
+        value: text.slice(lastIndex, match.index),
+      });
+    }
+    segments.push({ ansi: true, value: match[0] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    segments.push({ ansi: false, value: text.slice(lastIndex) });
+  }
+
+  const decorate = (segment: string) => {
+    let output = segment;
+    patterns.forEach((pattern) => {
+      output = output.replace(pattern.regex, (token) => {
+        const start = `[38;2;${pattern.color}m${
+          pattern.underline ? "[4m" : ""
+        }`;
+        const end = "[39m[24m";
+        return `${start}${token}${end}`;
+      });
+    });
+    return output;
+  };
+
+  return segments
+    .map((seg) => (seg.ansi ? seg.value : decorate(seg.value)))
+    .join("");
+};
+
+const applyShikiHighlight = (text: string, mode: ShikiMode) => {
+  const shouldRun =
+    mode === "force" || (mode === "auto" && hasCodeFence(text));
+  const withCode = shouldRun ? renderCodeFences(text) : text;
+  return applyHighlight(withCode);
+};
+
 export const defineHtermElements = () => {
   if (customElements.get(ELEMENT_NAME)) return;
 
@@ -35,10 +131,97 @@ export const defineHtermElements = () => {
     private _mountListener: (() => void) | null = null;
     private _outputBuffer = "";
     private _testOverlay = new Map<string, Uint8Array>();
+    private _highlightMode: ShikiMode = "auto";
+    private _terminalId = "";
+    private _mirroring = false;
+    private _deliverFromMultiplicity: ((text: string) => void) | null = null;
+    private _indicatorEl: HTMLElement | null = null;
+    private _registeredWithMultiplicity = false;
+
+    static get observedAttributes() {
+      return ["data-highlight-mode"];
+    }
+
+    attributeChangedCallback(
+      name: string,
+      _oldValue: string | null,
+      newValue: string | null,
+    ) {
+      if (name === "data-highlight-mode") {
+        this._highlightMode = normalizeShikiMode(newValue);
+      }
+    }
 
     private _appendOutput(chunk: string) {
       this._outputBuffer = `${this._outputBuffer}${chunk}`.slice(-20000);
       this.dataset.outputTail = this._outputBuffer.slice(-200);
+    }
+
+    private _shouldShareKeystroke(str: string) {
+      if (!str) return false;
+      if (str === "\u0003" || str === "\x7f") return false;
+      if (str.includes("\u001b")) return false;
+      return true;
+    }
+
+    private _maybeBroadcastKeystroke(str: string) {
+      if (this._mirroring) return;
+      if (!this._shouldShareKeystroke(str)) return;
+      multiplicityController.inputFrom(this._ensureTerminalId(), str);
+    }
+
+    private _ensureTerminalId() {
+      if (this._terminalId) return this._terminalId;
+      const fallback = `stare-term-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
+      const generated =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : fallback;
+      this._terminalId = generated;
+      return generated;
+    }
+
+    private _buildMultiplicityIndicator(host: HTMLElement) {
+      if (this._indicatorEl) return;
+      const indicator = document.createElement("div");
+      indicator.className = "stare-multiplicity-indicator";
+      indicator.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 2; i += 1) {
+        const cursor = document.createElement("span");
+        cursor.className = "stare-multiplicity-cursor";
+        indicator.appendChild(cursor);
+      }
+      host.appendChild(indicator);
+      this._indicatorEl = indicator;
+    }
+
+    private _setMultiplicityIndicatorState(active: boolean) {
+      this.classList.toggle("multiplicity-active", active);
+      if (this._indicatorEl) {
+        this._indicatorEl.dataset.active = active ? "1" : "0";
+      }
+    }
+
+    private _registerWithMultiplicity() {
+      if (this._registeredWithMultiplicity) return;
+      multiplicityController.register({
+        id: this._ensureTerminalId(),
+        deliverInput: (text) => {
+          this._deliverFromMultiplicity?.(text);
+        },
+        setIndicatorState: (active) => {
+          this._setMultiplicityIndicatorState(active);
+        },
+      });
+      this._registeredWithMultiplicity = true;
+    }
+
+    private _unregisterMultiplicity() {
+      if (!this._registeredWithMultiplicity) return;
+      multiplicityController.unregister(this._terminalId);
+      this._registeredWithMultiplicity = false;
     }
 
     async connectedCallback() {
@@ -49,6 +232,7 @@ export const defineHtermElements = () => {
       this.style.width = "100%";
       this.style.height = "100%";
       this.style.position = "relative";
+      this.classList.add("stare-terminal");
 
       const host = document.createElement("div");
       host.className = "stare-terminal-host";
@@ -56,6 +240,10 @@ export const defineHtermElements = () => {
       host.style.width = "100%";
       host.style.height = "100%";
       this.appendChild(host);
+      this._buildMultiplicityIndicator(host);
+      this._highlightMode = normalizeShikiMode(
+        this.getAttribute("data-highlight-mode"),
+      );
 
       const hterm = await loadHterm();
 
@@ -74,13 +262,23 @@ export const defineHtermElements = () => {
         let buffer = "";
         const basePrint = io.print.bind(io);
         const basePrintln = io.println.bind(io);
+        const highlight = (value: string) =>
+          applyShikiHighlight(value, this._highlightMode);
         io.print = (text: string) => {
-          this._appendOutput(text);
-          basePrint(text);
+          const highlighted = highlight(text);
+          this._appendOutput(highlighted);
+          basePrint(highlighted);
         };
         io.println = (text: string) => {
-          this._appendOutput(`${text}\n`);
-          basePrintln(text);
+          const highlighted = highlight(text);
+          this._appendOutput(`${highlighted}\n`);
+          basePrintln(highlighted);
+        };
+        const attachKeystrokeHandler = (handler: (str: string) => void) => {
+          io.onVTKeystroke = (str: string) => {
+            handler(str);
+            this._maybeBroadcastKeystroke(str);
+          };
         };
         const sendClipboardText = async () => {
           try {
@@ -109,6 +307,37 @@ export const defineHtermElements = () => {
           io.print(`\r\n${prompt} $ `);
         };
 
+        const bufferHandler = (str: string) => {
+          if (str === "\r") {
+            if (buffer.trim() === "help") {
+              io.print("\r\ncommands: help, clear");
+            } else if (buffer.trim() === "clear") {
+              io.print("\u001b[2J\u001b[H");
+            }
+            buffer = "";
+            showPrompt();
+            return;
+          }
+
+          if (str === "\u0003") {
+            io.print("^C");
+            buffer = "";
+            showPrompt();
+            return;
+          }
+
+          if (str === "\x7f") {
+            if (buffer.length > 0) {
+              buffer = buffer.slice(0, -1);
+              io.print("\b \b");
+            }
+            return;
+          }
+
+          buffer += str;
+          io.print(str);
+        };
+
         if (backend === "friscy") {
           bootFriscy({
             onStatus: (message) => {
@@ -128,8 +357,9 @@ export const defineHtermElements = () => {
               );
             },
             onStdout: (chunk) => {
-              this._appendOutput(chunk);
-              io.print(chunk);
+              const highlighted = highlight(chunk);
+              this._appendOutput(highlighted);
+              io.print(highlighted);
             },
           })
             .then((runtime) => {
@@ -142,47 +372,23 @@ export const defineHtermElements = () => {
               io.print(`\\r\\n[friscy] boot error: ${err.message}\\r\\n`);
             });
 
-          io.onVTKeystroke = (str: string) => {
+          attachKeystrokeHandler((str) => {
             this._friscy?.queueInput(str);
-          };
+          });
           io.sendString = io.onVTKeystroke;
         } else {
-          io.onVTKeystroke = (str: string) => {
-            if (str === "\r") {
-              if (buffer.trim() === "help") {
-                io.print("\r\ncommands: help, clear");
-              } else if (buffer.trim() === "clear") {
-                io.print("\u001b[2J\u001b[H");
-              }
-              buffer = "";
-              showPrompt();
-              return;
-            }
-
-            if (str === "\u0003") {
-              io.print("^C");
-              buffer = "";
-              showPrompt();
-              return;
-            }
-
-            if (str === "\x7f") {
-              if (buffer.length > 0) {
-                buffer = buffer.slice(0, -1);
-                io.print("\b \b");
-              }
-              return;
-            }
-
-            buffer += str;
-            io.print(str);
-          };
-
+          attachKeystrokeHandler(bufferHandler);
           io.sendString = io.onVTKeystroke;
-
           io.println(banner);
           io.print(`${prompt} $ `);
         }
+
+        this._deliverFromMultiplicity = (text: string) => {
+          this._mirroring = true;
+          io.sendString?.(text);
+          this._mirroring = false;
+        };
+        this._registerWithMultiplicity();
 
         let lastPasteFallback = "";
         this.addEventListener("paste", (event) => {
@@ -229,7 +435,7 @@ export const defineHtermElements = () => {
       term.onTerminalReady = onReady;
 
       term.decorate(host);
-      term.setFontFamily("'Space Mono', monospace");
+      term.setFontFamily("'Maple Mono', monospace");
       term.setFontSize(13);
       term.setCursorBlink(true);
       term.installKeyboard();
@@ -248,6 +454,7 @@ export const defineHtermElements = () => {
         window.removeEventListener("stare:mounts-changed", this._mountListener);
         this._mountListener = null;
       }
+      this._unregisterMultiplicity();
     }
 
     exportGuestVfs() {

@@ -6,7 +6,47 @@
  *
  */
 
-@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap");
+
+@font-face {
+  font-family: "Maple Mono";
+  src: url("/fonts/MapleMono/MapleMono-Regular.ttf.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Maple Mono";
+  src: url("/fonts/MapleMono/MapleMono-Italic.ttf.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Maple Mono";
+  src: url("/fonts/MapleMono/MapleMono-Medium.ttf.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Maple Mono";
+  src: url("/fonts/MapleMono/MapleMono-SemiBold.ttf.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Maple Mono";
+  src: url("/fonts/MapleMono/MapleMono-Bold.ttf.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   --qwik-dark-blue: #006ce9;
@@ -49,7 +89,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: "Space Mono", monospace;
+  font-family: "Maple Mono", monospace;
   text-transform: lowercase;
   letter-spacing: 0.2em;
   font-size: 0.7rem;
@@ -77,8 +117,16 @@ body {
   padding: 0.4rem 0.9rem;
   text-transform: lowercase;
   letter-spacing: 0.2em;
-  font-family: "Space Mono", monospace;
+  font-family: "Maple Mono", monospace;
   cursor: pointer;
+}
+
+.stare-terminal-host,
+.stare-terminal-host * {
+  font-family: "Maple Mono", monospace;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  font-smooth: always;
 }
 
 .stare-shell {
@@ -128,6 +176,51 @@ body {
   flex-direction: column;
   min-height: 0;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stare-terminal.multiplicity-active {
+  outline: 2px solid rgba(94, 234, 212, 0.5);
+  outline-offset: 1px;
+}
+
+.stare-multiplicity-indicator {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: flex-end;
+  gap: 1rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.stare-terminal.multiplicity-active .stare-multiplicity-indicator {
+  opacity: 1;
+}
+
+.stare-multiplicity-cursor {
+  width: 2px;
+  height: 40%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #64f3ff, #c084fc);
+  box-shadow: 0 0 16px rgba(99, 232, 255, 0.9);
+  animation: stareRainbowPulse 1200ms ease-in-out infinite alternate;
+}
+
+@keyframes stareRainbowPulse {
+  0% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
 }
 
 .stare-terminal-pane.drop-target {

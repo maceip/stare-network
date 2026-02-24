@@ -1,3 +1,5 @@
+import { multiplicityController } from "./terminal/multiplicity-controller";
+
 export const initStare = async () => {
   if (typeof window === "undefined") return;
   if ((window as any).__stareInit) return;
@@ -56,6 +58,10 @@ export const initStare = async () => {
     if (!syncTimeChip) return;
     syncTimeChip.textContent = label;
   };
+
+  multiplicityController.onStateChange((active) => {
+    document.body.classList.toggle("multiplicity-mode", active);
+  });
 
   const updateBackendFromStatus = (detail: string) => {
     if (detail.startsWith("booting")) {
@@ -303,6 +309,12 @@ export const initStare = async () => {
   window.addEventListener("keydown", markActivity);
   window.addEventListener("pointerdown", markActivity);
   window.addEventListener("mousemove", markActivity, { passive: true });
+  window.addEventListener("keydown", (event) => {
+    if (event.ctrlKey && event.shiftKey && event.code === "KeyM") {
+      event.preventDefault();
+      multiplicityController.toggle();
+    }
+  });
 
   window.setInterval(() => {
     if (!document.body.classList.contains("sync-auto")) return;
