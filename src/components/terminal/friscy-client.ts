@@ -12,14 +12,16 @@ type NetworkModules = {
   ) => { start: () => void };
 };
 
-const loadNetworkModules = async (): Promise<NetworkModules> => {
+const loadNetworkModules = async (
+  basePath: string,
+): Promise<NetworkModules> => {
   const dynamicImport = new Function(
     "u",
     "return import(u)",
   ) as (u: string) => Promise<any>;
   const [bridgeMod, hostMod] = await Promise.all([
-    dynamicImport("/friscy/network_bridge.js"),
-    dynamicImport("/friscy/network_rpc_host.js"),
+    dynamicImport(`${basePath}/network_bridge.js`),
+    dynamicImport(`${basePath}/network_rpc_host.js`),
   ]);
   return {
     FriscyNetworkBridge: bridgeMod.FriscyNetworkBridge,
@@ -96,7 +98,15 @@ const sanitizeTerminalOutput = (
   return combined;
 };
 
-export const bootFriscy = async (hooks: FriscyHooks): Promise<FriscyRuntime> => {
+export type FriscyBootOptions = {
+  example?: string;
+  basePath?: string;
+};
+
+export const bootFriscy = async (
+  hooks: FriscyHooks,
+  options: FriscyBootOptions = {},
+): Promise<FriscyRuntime> => {
   const stdinQueue: number[] = [];
   let worker: Worker | null = null;
   let controlView: Int32Array | null = null;
@@ -168,15 +178,17 @@ export const bootFriscy = async (hooks: FriscyHooks): Promise<FriscyRuntime> => 
     return await resp.arrayBuffer();
   };
 
-  const manifest = await fetch("/friscy/manifest.json", {
+  const basePath = options.basePath ?? "/friscy";
+  const example = options.example ?? "alpine";
+  const manifest = await fetch(`${basePath}/manifest.json`, {
     cache: "no-store",
   }).then((r) => r.json());
-  const cfg = manifest.examples?.alpine;
-  if (!cfg) throw new Error("unknown example: alpine");
+  const cfg = manifest.examples?.[example];
+  if (!cfg) throw new Error(`unknown example: ${example}`);
   const opt = readOptimizationConfig();
 
-  hooks.onStatus("booting:alpine");
-  hooks.onBoot(`boot: preparing ${cfg.image}`);
+  hooks.onStatus(`booting:${example}`);
+  hooks.onBoot(`boot: preparing ${cfg.image ?? example}`);
 
   const [rootfs, checkpoint] = await Promise.all([
     fetchArrayBuffer(cfg.rootfs, "alpine rootfs"),
@@ -196,7 +208,7 @@ export const bootFriscy = async (hooks: FriscyHooks): Promise<FriscyRuntime> => 
   stdoutView = new Int32Array(stdoutSab);
   stdoutBytes = new Uint8Array(stdoutSab);
 
-  worker = new Worker("/friscy/worker.js", { type: "module" });
+  worker = new Worker(`${basePath}/worker.js`, { type: "module" });
 
   const ready = new Promise<void>((resolve, reject) => {
     let settled = false;
@@ -254,7 +266,8 @@ export const bootFriscy = async (hooks: FriscyHooks): Promise<FriscyRuntime> => 
 
   if (allowNetwork) {
     let bridgeForHost: any = null;
-    const { FriscyNetworkBridge, NetworkRPCHost } = await loadNetworkModules();
+    const { FriscyNetworkBridge, NetworkRPCHost } =
+      await loadNetworkModules(basePath);
     try {
       bridgeForHost = new FriscyNetworkBridge(proxyUrl, { certHash: null });
       await Promise.race([
@@ -294,7 +307,9 @@ export const bootFriscy = async (hooks: FriscyHooks): Promise<FriscyRuntime> => 
   const entry = Array.isArray(cfg.entrypoint)
     ? cfg.entrypoint
     : String(cfg.entrypoint || "").split(" ");
-  const envArgs = (manifest.env || []).flatMap((e: string) => ["--env", e]);
+  const envArgs = [...(manifest.env || []), ...(cfg.env || [])].flatMap(
+    (e: string) => ["--env", e],
+  );
   const args = [...envArgs, "--rootfs", "/rootfs.tar", ...entry];
   const msg: any = {
     type: "run",
@@ -315,7 +330,7 @@ export const bootFriscy = async (hooks: FriscyHooks): Promise<FriscyRuntime> => 
     checkExit();
   }, 8);
 
-  hooks.onStatus("starting:alpine");
+  hooks.onStatus(`starting:${example}`);
   hooks.onBoot(`boot: launching ${cfg.image} (waiting for stdin)`);
 
   return {

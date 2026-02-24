@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "env": [
+    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "HOME=/root",
+    "TERM=dumb"
+  ],
+  "examples": {
+    "alpine": {
+      "image": "friscy-alpine",
+      "rootfs": "/friscy-golden/rootfs.tar",
+      "entrypoint": ["/bin/sh", "-i"],
+      "allowNetwork": true
+    },
+    "nodejs": {
+      "image": "friscy-nodejs",
+      "rootfs": "/friscy-golden/nodejs.tar",
+      "entrypoint": ["/usr/bin/node", "--jitless", "--max-old-space-size=256", "-e", "const fs=require('fs'),vm=require('vm'),util=require('util');const ctx=vm.createContext({require,console,process,Buffer,globalThis});let line='';process.stdout.write('> ');const b=Buffer.alloc(1);while(true){const n=fs.readSync(0,b,0,1,null);if(n<=0)break;const ch=b.toString('utf8',0,1);if(ch==='\\r')continue;if(ch!=='\\n'){line+=ch;continue;}const src=line;line='';const t=src.trim();if(t===''){process.stdout.write('> ');continue;}if(t==='.exit'||t==='exit'){break;}try{const out=vm.runInContext(src,ctx);if(out!==undefined)process.stdout.write(util.inspect(out)+'\\n');}catch(e){process.stdout.write(String((e&&e.stack)||e)+'\\n');}process.stdout.write('> ');}"],
+      "allowNetwork": true
+    },
+    "claude-cli": {
+      "image": "friscy-claude",
+      "rootfs": "/friscy-golden/claude-slim.tar",
+      "entrypoint": ["/usr/local/bin/claude", "-p", "Write a haiku about RISC-V emulation"],
+      "env": ["NODE_OPTIONS=--jitless --no-experimental-strip-types --max-old-space-size=256 -r /etc/dns-preload.js -r /etc/https-hostfetch-preload.js", "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"],
+      "dns": ["108.61.10.10"],
+      "allowNetwork": true
+    }
+  }
+}

@@ -1,4 +1,6 @@
 .env 
+# Generated manifests with secrets
+/public/friscy-golden/manifest.json
 # External / vendored
 external/
 

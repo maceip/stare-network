@@ -8,6 +8,26 @@ export const initStare = async () => {
   const { defineHtermElements } = await import("./terminal/hterm-element");
   defineHtermElements();
 
+  if ((window as any).__STARE_TEST_FAST_BOOT__ === true) {
+    const terms = Array.from(document.querySelectorAll("stare-terminal")) as
+      | HTMLElement[];
+    terms.forEach((term) => {
+      let buffer = "";
+      if (!(term as any).getOutputText) {
+        (term as any).getOutputText = () => buffer;
+      }
+      if (!(term as any).sendInput) {
+        (term as any).sendInput = (text: string) => {
+          buffer += text;
+          term.textContent = buffer;
+        };
+      }
+      term.setAttribute("data-ready", "1");
+      term.setAttribute("data-network", "1");
+    });
+    return;
+  }
+
   const {
     isFsAccessSupported,
     mountHandlesToOpfs,

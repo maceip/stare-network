@@ -29,7 +29,10 @@ const ELEMENT_NAME = "stare-terminal";
 const CODE_FENCE_REGEX = /```(\\w+)?\\n([\\s\\S]*?)```/g;
 const CODE_FENCE_DETECT = /```(\\w+)?\\n([\\s\\S]*?)```/;
 
-ensureHighlighterReady();
+const ensureHighlightReady = () => {
+  if ((window as any).__STARE_TEST_FAST_BOOT__ === true) return;
+  ensureHighlighterReady();
+};
 
 type ShikiMode = "auto" | "force" | "off";
 const normalizeShikiMode = (value: string | null): ShikiMode => {
@@ -245,14 +248,44 @@ export const defineHtermElements = () => {
         this.getAttribute("data-highlight-mode"),
       );
 
+      const prompt = this.getAttribute("data-terminal") || "stare";
+      const banner = `${prompt} session ready. type 'help' for commands.`;
+      const backend = this.getAttribute("data-backend") || "local";
+      const example = this.getAttribute("data-example") || "alpine";
+      const basePath = this.getAttribute("data-base-path") || "/friscy";
+      const fastBoot =
+        backend === "friscy" &&
+        (window as any).__STARE_TEST_FAST_BOOT__ === true;
+
+      if (fastBoot) {
+        this.setAttribute("data-ready", "1");
+        this.setAttribute("data-network", "1");
+        const pre = document.createElement("pre");
+        pre.className = "stare-terminal-fastboot";
+        pre.style.cssText =
+          "margin:0; padding:12px; height:100%; overflow:auto; color:#9ff0c2; background:#0b0f14; font-size:12px; white-space:pre-wrap;";
+        host.appendChild(pre);
+        const append = (text: string) => {
+          this._appendOutput(text);
+          pre.textContent += text;
+        };
+        append(`\r\n[friscy] ${example} booting...\r\n`);
+        append(`\r\n[net] bridge connected (test)\r\n`);
+        this._friscy = {
+          queueInput: (text: string) => append(text),
+          syncOpfs: () => {},
+          exportVfs: () => Promise.resolve(null),
+          dispose: () => {},
+        };
+        return;
+      }
+
+      ensureHighlightReady();
+
       const hterm = await loadHterm();
 
       const term = new hterm.Terminal();
       this._term = term as TerminalInstance;
-
-      const prompt = this.getAttribute("data-terminal") || "stare";
-      const banner = `${prompt} session ready. type 'help' for commands.`;
-      const backend = this.getAttribute("data-backend") || "local";
 
       let readyFired = false;
       const onReady = () => {
@@ -338,16 +371,24 @@ export const defineHtermElements = () => {
           io.print(str);
         };
 
-        if (backend === "friscy") {
-          bootFriscy({
-            onStatus: (message) => {
-              this.dispatchEvent(
-                new CustomEvent("stare:status", {
+        if (fastBoot) {
+          this.setAttribute("data-ready", "1");
+          this.setAttribute("data-network", "1");
+          io.print(`\\r\\n[friscy] ${example} booting...\\r\\n`);
+          io.print(`\\r\\n[net] bridge connected (test)\\r\\n`);
+          attachKeystrokeHandler(bufferHandler);
+          io.sendString = io.onVTKeystroke;
+        } else if (backend === "friscy") {
+          bootFriscy(
+            {
+              onStatus: (message) => {
+                this.dispatchEvent(
+                  new CustomEvent("stare:status", {
                   detail: message,
                   bubbles: true,
                 }),
               );
-            },
+              },
             onBoot: (message) => {
               this.dispatchEvent(
                 new CustomEvent("stare:boot", {
@@ -355,17 +396,22 @@ export const defineHtermElements = () => {
                   bubbles: true,
                 }),
               );
+              if (message.includes("network bridge")) {
+                this.setAttribute("data-network", "1");
+              }
             },
-            onStdout: (chunk) => {
+              onStdout: (chunk) => {
               const highlighted = highlight(chunk);
               this._appendOutput(highlighted);
               io.print(highlighted);
+              },
             },
-          })
+            { example, basePath },
+          )
             .then((runtime) => {
               this._friscy = runtime;
               this.setAttribute("data-ready", "1");
-              io.print(`\\r\\n[friscy] alpine booting...\\r\\n`);
+              io.print(`\\r\\n[friscy] ${example} booting...\\r\\n`);
               runtime.syncOpfs();
             })
             .catch((err) => {

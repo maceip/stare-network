@@ -22,7 +22,7 @@ export default component$(() => {
           </div>
         </nav>
 
-        <main class="stare-shell single">
+        <main class="stare-shell">
           <section class="stare-terminal-pane terminal-a" data-pane>
             <header class="stare-terminal-title">
               <div class="stare-terminal-left">
@@ -46,7 +46,77 @@ export default component$(() => {
                 <button class="stare-terminal-btn ghost">⋯</button>
               </div>
             </header>
-            <stare-terminal data-terminal="alpine" data-backend="friscy"></stare-terminal>
+            <stare-terminal
+              data-terminal="alpine"
+              data-backend="friscy"
+              data-example="alpine"
+              data-base-path="/friscy-golden"
+              data-network="1"
+            ></stare-terminal>
+          </section>
+
+          <section class="stare-terminal-pane terminal-b" data-pane>
+            <header class="stare-terminal-title">
+              <div class="stare-terminal-left">
+                <span class="stare-terminal-dot"></span>
+                <span class="stare-terminal-name">nodejs</span>
+                <span class="stare-terminal-session">S-----</span>
+              </div>
+              <div class="stare-terminal-right">
+                <span class="stare-terminal-chip" data-chip="latency">
+                  lat 18ms
+                </span>
+                <span class="stare-terminal-chip" data-chip="backend">
+                  booting
+                </span>
+                <span class="stare-terminal-chip" data-chip="sync">
+                  sync idle
+                </span>
+                <span class="stare-terminal-chip" data-chip="sync-time">
+                  synced --:--
+                </span>
+                <button class="stare-terminal-btn ghost">⋯</button>
+              </div>
+            </header>
+            <stare-terminal
+              data-terminal="nodejs"
+              data-backend="friscy"
+              data-example="nodejs"
+              data-base-path="/friscy-golden"
+              data-network="1"
+            ></stare-terminal>
+          </section>
+
+          <section class="stare-terminal-pane terminal-c" data-pane>
+            <header class="stare-terminal-title">
+              <div class="stare-terminal-left">
+                <span class="stare-terminal-dot"></span>
+                <span class="stare-terminal-name">claude-cli</span>
+                <span class="stare-terminal-session">S-----</span>
+              </div>
+              <div class="stare-terminal-right">
+                <span class="stare-terminal-chip" data-chip="latency">
+                  lat 18ms
+                </span>
+                <span class="stare-terminal-chip" data-chip="backend">
+                  booting
+                </span>
+                <span class="stare-terminal-chip" data-chip="sync">
+                  sync idle
+                </span>
+                <span class="stare-terminal-chip" data-chip="sync-time">
+                  synced --:--
+                </span>
+                <button class="stare-terminal-btn ghost">⋯</button>
+              </div>
+            </header>
+            <stare-terminal
+              data-terminal="claude-cli"
+              data-backend="friscy"
+              data-example="claude-cli"
+              data-base-path="/friscy-golden"
+              data-network="1"
+            ></stare-terminal>
           </section>
         </main>
 

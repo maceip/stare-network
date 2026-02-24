@@ -522,11 +522,12 @@ stare-terminal.paste-flash::after {
 @media (max-width: 980px) {
   .stare-shell {
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .terminal-c {
-    display: none;
+    grid-column: 1 / span 2;
+    grid-row: 2 / span 1;
   }
 
   .terminal-a,
@@ -539,11 +540,12 @@ stare-terminal.paste-flash::after {
 @media (max-width: 600px) {
   .stare-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
   }
 
   .terminal-a,
-  .terminal-b {
+  .terminal-b,
+  .terminal-c {
     grid-row: auto;
     grid-column: auto;
   }

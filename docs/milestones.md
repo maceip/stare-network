@@ -1,5 +1,20 @@
 # Demo Milestones + Test Gates
 
+## Website — Launch Criteria
+
+Deliverables
+1. Homepage hero (marketing) above terminals (option 3).
+2. Two terminals booting: `claude` + `gemini`.
+3. Folder mount from local disk visible inside the guest (at least one terminal).
+4. Networking enabled on both terminals.
+5. Standalone production build runnable on this host (no cloud deploy).
+
+Success criteria
+1. Manual: on `/`, terminals visibly boot and accept input.
+2. Manual: mount folder via picker or drag-drop, verify folder appears in guest.
+3. Manual: both terminals can reach network (e.g., DNS or HTTP test).
+4. Build: `npm run build` + `npm run preview` works locally.
+
 ## M1 — Demo Layout + 2-Term Minimum
 
 Deliverables

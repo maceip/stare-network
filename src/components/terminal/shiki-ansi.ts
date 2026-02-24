@@ -1,4 +1,4 @@
-import { getHighlighter, type Highlighter, type IThemedToken } from "shiki";
+import { createHighlighter, type Highlighter, type IThemedToken } from "shiki";
 
 const HIGHLIGHT_LANGUAGES = [
   "rust",
@@ -15,7 +15,7 @@ let highlighter: Highlighter | null = null;
 const initHighlighter = async () => {
   if (highlighter) return highlighter;
   try {
-    highlighter = await getHighlighter({
+    highlighter = await createHighlighter({
       theme: "nord",
       langs: HIGHLIGHT_LANGUAGES,
     });
