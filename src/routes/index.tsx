@@ -1,100 +1,98 @@
-import { component$ } from "@builder.io/qwik";
-import type { DocumentHead } from "@builder.io/qwik-city";
-
-import Counter from "../components/starter/counter/counter";
-import Hero from "../components/starter/hero/hero";
-import Infobox from "../components/starter/infobox/infobox";
-import Starter from "../components/starter/next-steps/next-steps";
+import { component$, useTask$, isServer } from "@qwik.dev/core";
+import type { DocumentHead } from "@qwik.dev/router";
 
 export default component$(() => {
+  useTask$(async () => {
+    if (isServer) return;
+    const { initStare } = await import("../components/stare-init");
+    await initStare();
+  });
+
   return (
     <>
-      <Hero />
-      <Starter />
-
-      <div role="presentation" class="ellipsis"></div>
-      <div role="presentation" class="ellipsis ellipsis-purple"></div>
-
-      <div class="container container-center container-spacing-xl">
-        <h3>
-          You can <span class="highlight">count</span>
-          <br /> on me
-        </h3>
-        <Counter />
-      </div>
-
-      <div class="container container-flex">
-        <Infobox>
-          <div q:slot="title" class="icon icon-cli">
-            CLI Commands
+      <div class="stare-page">
+        <nav class="stare-nav">
+          <div class="stare-brand">stare.network</div>
+          <div class="stare-links">
+            <a href="/docs">docs</a>
+            <a href="https://github.com/" target="_blank" rel="noreferrer">
+              github
+            </a>
+            <button class="stare-login">login</button>
           </div>
-          <>
-            <p>
-              <code>npm run dev</code>
-              <br />
-              Starts the development server and watches for changes
-            </p>
-            <p>
-              <code>npm run preview</code>
-              <br />
-              Creates production build and starts a server to preview it
-            </p>
-            <p>
-              <code>npm run build</code>
-              <br />
-              Creates production build
-            </p>
-            <p>
-              <code>npm run qwik add</code>
-              <br />
-              Runs the qwik CLI to add integrations
-            </p>
-          </>
-        </Infobox>
+        </nav>
 
-        <div>
-          <Infobox>
-            <div q:slot="title" class="icon icon-apps">
-              Example Apps
-            </div>
-            <p>
-              Have a look at the <a href="/demo/flower">Flower App</a> or the{" "}
-              <a href="/demo/todolist">Todo App</a>.
-            </p>
-          </Infobox>
+        <main class="stare-shell single">
+          <section class="stare-terminal-pane terminal-a" data-pane>
+            <header class="stare-terminal-title">
+              <div class="stare-terminal-left">
+                <span class="stare-terminal-dot"></span>
+                <span class="stare-terminal-name">alpine</span>
+                <span class="stare-terminal-session">S-----</span>
+              </div>
+              <div class="stare-terminal-right">
+                <span class="stare-terminal-chip" data-chip="latency">
+                  lat 18ms
+                </span>
+                <span class="stare-terminal-chip" data-chip="backend">
+                  booting
+                </span>
+                <span class="stare-terminal-chip" data-chip="sync">
+                  sync idle
+                </span>
+                <span class="stare-terminal-chip" data-chip="sync-time">
+                  synced --:--
+                </span>
+                <button class="stare-terminal-btn ghost">⋯</button>
+              </div>
+            </header>
+            <stare-terminal data-terminal="alpine" data-backend="friscy"></stare-terminal>
+          </section>
+        </main>
 
-          <Infobox>
-            <div q:slot="title" class="icon icon-community">
-              Community
+        <div class="stare-status-rail">
+          <div class="stare-status-message">
+            drag & drop a folder or click mount
+          </div>
+          <div class="stare-status-actions">
+            <button id="stare-mount-btn" class="stare-status-action">
+              mount
+            </button>
+            <button id="stare-mount-files" class="stare-status-action secondary">
+              files
+            </button>
+            <button id="stare-sync-btn" class="stare-status-action ghost">
+              sync
+            </button>
+            <button id="stare-sync-auto" class="stare-status-action ghost">
+              sync auto
+            </button>
+            <button
+              id="stare-reauth-btn"
+              class="stare-status-action danger hidden"
+            >
+              reauth
+            </button>
+            <div class="stare-status-popover">
+              <button class="stare-status-action ghost">mounts</button>
+              <div class="stare-status-popover-card">
+                <div class="stare-status-popover-title">mounted</div>
+                <div class="stare-status-popover-list"></div>
+              </div>
             </div>
-            <ul>
-              <li>
-                <span>Questions or just want to say hi? </span>
-                <a href="https://qwik.dev/chat" target="_blank">
-                  Chat on discord!
-                </a>
-              </li>
-              <li>
-                <span>Follow </span>
-                <a href="https://twitter.com/QwikDev" target="_blank">
-                  @QwikDev
-                </a>
-                <span> on Twitter</span>
-              </li>
-              <li>
-                <span>Open issues and contribute on </span>
-                <a href="https://github.com/QwikDev/qwik" target="_blank">
-                  GitHub
-                </a>
-              </li>
-              <li>
-                <span>Watch </span>
-                <a href="https://qwik.dev/media/" target="_blank">
-                  Presentations, Podcasts, Videos, etc.
-                </a>
-              </li>
-            </ul>
-          </Infobox>
+            <button id="stare-rail-auto" class="stare-status-action ghost">
+              auto
+            </button>
+            <button id="stare-rail-toggle" class="stare-status-action ghost">
+              hide
+            </button>
+          </div>
+        </div>
+
+        <div class="stare-drop-overlay">
+          <div class="stare-drop-mesh"></div>
+          <div class="stare-drop-ripples"></div>
+          <div class="stare-drop-label">drop to mount</div>
         </div>
       </div>
     </>

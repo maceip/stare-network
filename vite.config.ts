@@ -3,8 +3,8 @@
  * When building, the adapter config is used which loads this file and extends it.
  */
 import { defineConfig, type UserConfig } from "vite";
-import { qwikVite } from "@builder.io/qwik/optimizer";
-import { qwikCity } from "@builder.io/qwik-city/vite";
+import { qwikVite } from "@qwik.dev/core/optimizer";
+import { qwikCity } from "@qwik.dev/router/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import pkg from "./package.json";
 
@@ -21,7 +21,21 @@ errorOnDuplicatesPkgDeps(devDependencies, dependencies);
  */
 export default defineConfig(({ command, mode }): UserConfig => {
   return {
-    plugins: [qwikCity(), qwikVite(), tsconfigPaths({ root: "." })],
+    plugins: [
+      qwikCity(),
+      qwikVite(),
+      tsconfigPaths({ projects: ["./tsconfig.json"] }),
+      {
+        name: "stare-coop-coep",
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+            res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+            next();
+          });
+        },
+      },
+    ],
     // This tells Vite which dependencies to pre-build in dev mode.
     optimizeDeps: {
       // Put problematic deps that break bundling here, mostly those with binaries.
@@ -50,12 +64,16 @@ export default defineConfig(({ command, mode }): UserConfig => {
       headers: {
         // Don't cache the server response in dev mode
         "Cache-Control": "public, max-age=0",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp",
       },
     },
     preview: {
       headers: {
         // Do cache the server response in preview (non-adapter production build)
         "Cache-Control": "public, max-age=600",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp",
       },
     },
   };

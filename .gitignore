@@ -3,7 +3,7 @@
 /lib
 /lib-types
 /server
-
+/REQ
 # Development
 node_modules
 .env
@@ -23,6 +23,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+test-results/
+playwright-report/
 
 # Editor
 .vscode/*

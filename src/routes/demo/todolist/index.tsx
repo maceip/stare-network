@@ -1,4 +1,4 @@
-import { component$ } from "@builder.io/qwik";
+import { component$ } from "@qwik.dev/core";
 import {
   type DocumentHead,
   routeLoader$,
@@ -6,7 +6,7 @@ import {
   zod$,
   z,
   Form,
-} from "@builder.io/qwik-city";
+} from "@qwik.dev/router";
 import styles from "./todolist.module.css";
 
 interface ListItem {
