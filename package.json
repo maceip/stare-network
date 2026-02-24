@@ -40,9 +40,11 @@
     "undici": "*",
     "vite": "7.3.1",
     "vite-tsconfig-paths": "^4.2.1",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "puppeteer": "^23.8.0"
   },
   "dependencies": {
-    "hterm": "^2.0.2"
+    "hterm": "^2.0.2",
+    "shiki": "^3.22.0"
   }
 }
