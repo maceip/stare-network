@@ -308,7 +308,7 @@ export const bootFriscy = async (
       };
     }
 
-    const netRpcHost = new NetworkRPCHost(netSab, bridgeForHost, {
+    const netRpcHost = new NetworkRPCHost(netSab!, bridgeForHost, {
       laneEnabled: false,
     });
     netRpcHost.start();

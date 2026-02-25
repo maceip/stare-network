@@ -41,12 +41,14 @@ const normalizeShikiMode = (value: string | null): ShikiMode => {
   return "auto";
 };
 
-const DEFAULT_HIGHLIGHT_PATTERNS: Array<{
+type HighlightPattern = {
   name: string;
   regex: RegExp;
   color: string;
   underline?: boolean;
-}> = [
+};
+
+const DEFAULT_HIGHLIGHT_PATTERNS: HighlightPattern[] = [
   {
     name: "url",
     regex: /https?:\/\/[^^\s<>()]+/g,
@@ -63,9 +65,8 @@ const DEFAULT_HIGHLIGHT_PATTERNS: Array<{
 
 const renderCodeFences = (text: string) => {
   CODE_FENCE_REGEX.lastIndex = 0;
-  return text.replace(CODE_FENCE_REGEX, (_match, lang = "plaintext", code) => {
-    const normalized = lang.trim() || "plaintext";
-    const highlighted = highlightCodeFence(code, normalized);
+  return text.replace(CODE_FENCE_REGEX, (_match, _lang = "plaintext", code) => {
+    const highlighted = highlightCodeFence(code);
     return `
 ${highlighted}
 `;
@@ -75,9 +76,14 @@ ${highlighted}
 const hasCodeFence = (text: string) => CODE_FENCE_DETECT.test(text);
 
 const applyHighlight = (text: string) => {
-  const patterns =
-    (window as any).__STARE_HIGHLIGHT_PATTERNS__ || DEFAULT_HIGHLIGHT_PATTERNS;
-  if (!patterns || patterns.length === 0) return text;
+  const customPatterns = (window as any).__STARE_HIGHLIGHT_PATTERNS__ as
+    | HighlightPattern[]
+    | undefined;
+  const patterns: HighlightPattern[] =
+    customPatterns && customPatterns.length
+      ? customPatterns
+      : DEFAULT_HIGHLIGHT_PATTERNS;
+  if (patterns.length === 0) return text;
 
   const ansiRegex = /\[[0-9;]*m/g;
   const segments: Array<{ ansi: boolean; value: string }> = [];
@@ -120,7 +126,7 @@ const applyShikiHighlight = (text: string, mode: ShikiMode) => {
   const shouldRun =
     mode === "force" || (mode === "auto" && hasCodeFence(text));
   if (shouldRun) {
-    ensureHighlighterReady();
+    void ensureHighlighterReady();
   }
   const withCode = shouldRun ? renderCodeFences(text) : text;
   return applyHighlight(withCode);

@@ -12,6 +12,13 @@ type IdRecord = {
   manifest?: Record<string, TarEntryMeta>;
 };
 
+type PermissionState = "granted" | "denied" | "prompt";
+type FileSystemPermissionMode = "read" | "readwrite";
+type QueryableFileSystemHandle = FileSystemHandle & {
+  queryPermission?: (options: { mode: FileSystemPermissionMode }) => Promise<PermissionState>;
+  requestPermission?: (options: { mode: FileSystemPermissionMode }) => Promise<PermissionState>;
+};
+
 const DB_NAME = "stare-fs";
 const STORE = "handles";
 const KEY = "mounts";
@@ -107,18 +114,19 @@ export const isFsAccessSupported = () =>
   typeof window !== "undefined" && "showDirectoryPicker" in window;
 
 const requestPermission = async (
-  handle: FileSystemHandle,
+  handle: QueryableFileSystemHandle,
   mode: FileSystemPermissionMode,
 ) => {
-  if (!("queryPermission" in handle)) return "granted";
+  if (!handle.queryPermission) return "granted";
   const query = await handle.queryPermission({ mode });
   if (query === "granted") return query;
+  if (!handle.requestPermission) return query;
   return handle.requestPermission({ mode });
 };
 
 const ensurePermission = async (handle: FileSystemHandle) => {
   const mode: FileSystemPermissionMode = "read";
-  const result = await requestPermission(handle, mode);
+  const result = await requestPermission(handle as QueryableFileSystemHandle, mode);
   if (result !== "granted") {
     throw new Error("Permission denied");
   }
@@ -145,11 +153,17 @@ const copyFile = async (
   await writable.close();
 };
 
+const getDirectoryValues = (dir: FileSystemDirectoryHandle) =>
+  (dir as FileSystemDirectoryHandle & {
+    values: () => AsyncIterable<FileSystemHandle>;
+  }).values();
+
 const copyDirectory = async (
   dirHandle: FileSystemDirectoryHandle,
   destDir: FileSystemDirectoryHandle,
 ) => {
-  for await (const [name, handle] of dirHandle.entries()) {
+  for await (const handle of getDirectoryValues(dirHandle)) {
+    const name = handle.name ?? "";
     const safeName = sanitizeName(name);
     if (handle.kind === "file") {
       const fileHandle = handle as FileSystemFileHandle;
@@ -218,7 +232,8 @@ export const handlesFromDragEvent = async (event: DragEvent) => {
 export const listOpfsMounts = async (): Promise<string[]> => {
   const root = await getOpfsRoot();
   const names: string[] = [];
-  for await (const [name, handle] of root.entries()) {
+  for await (const handle of getDirectoryValues(root)) {
+    const name = handle.name ?? "";
     if (handle.kind === "directory") {
       names.push(name);
     }
@@ -335,16 +350,15 @@ export const applyGuestTarToOpfs = async (
   }
 
   const pruneMissing = async (dir: FileSystemDirectoryHandle, base = "") => {
-    for await (const [name, handle] of dir.entries()) {
+    for await (const handle of getDirectoryValues(dir)) {
+      const name = handle.name ?? "";
       const rel = base ? `${base}/${name}` : name;
       if (handle.kind === "directory") {
         const child = handle as FileSystemDirectoryHandle;
         await pruneMissing(child, rel);
-        let hasEntries = false;
-        for await (const _entry of child.entries()) {
-          hasEntries = true;
-          break;
-        }
+        const childIterator = getDirectoryValues(child)[Symbol.asyncIterator]();
+        const nextEntry = await childIterator.next();
+        const hasEntries = !nextEntry.done;
         if (!hasEntries) {
           await dir.removeEntry(name);
         }
