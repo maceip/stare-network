@@ -51,7 +51,6 @@ export default component$(() => {
               data-backend="friscy"
               data-example="alpine"
               data-base-path="/friscy-golden"
-              data-network="1"
             ></stare-terminal>
           </section>
 
@@ -83,7 +82,6 @@ export default component$(() => {
               data-backend="friscy"
               data-example="nodejs"
               data-base-path="/friscy-golden"
-              data-network="1"
             ></stare-terminal>
           </section>
 
@@ -115,7 +113,6 @@ export default component$(() => {
               data-backend="friscy"
               data-example="claude-cli"
               data-base-path="/friscy-golden"
-              data-network="1"
             ></stare-terminal>
           </section>
         </main>

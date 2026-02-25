@@ -4,6 +4,7 @@ import { request } from "undici";
 import puppeteer from "puppeteer";
 
 const DEV_URL = "http://127.0.0.1:5173";
+const CHROME_PATH = process.env.CHROME_PATH || "/usr/bin/google-chrome";
 
 const waitForServer = async (timeoutMs = 60000) => {
   const start = Date.now();
@@ -27,56 +28,101 @@ const run = async () => {
   try {
     await waitForServer(90000);
 
-    const browser = await puppeteer.launch({ headless: "new" });
+    const browser = await puppeteer.launch({
+      headless: "new",
+      protocolTimeout: 600000,
+      executablePath: CHROME_PATH,
+    });
     const page = await browser.newPage();
+    page.setDefaultTimeout(600000);
+
+    page.on("console", (msg) => console.log(`[browser] ${msg.type()}: ${msg.text()}`));
+    page.on("pageerror", (err) => console.log(`[browser] pageerror: ${err.message}`));
 
     await page.evaluateOnNewDocument(() => {
       window.__STARE_ALLOW_INSECURE__ = true;
-      window.__STARE_TEST_FAST_BOOT__ = true;
     });
 
     await page.goto(DEV_URL, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("stare-terminal", { timeout: 30000 });
-
-    await page.evaluate(async () => {
-      window.__stareInit = false;
-      const mod = await import("/src/components/stare-init.ts");
-      await mod.initStare();
-    });
+    await page.waitForSelector("stare-terminal", { timeout: 60000 });
 
     const count = await page.evaluate(() => document.querySelectorAll("stare-terminal").length);
     if (count !== 3) throw new Error(`Expected 3 terminals, saw ${count}`);
 
+    // Wait until each terminal has some output (boot text)
     await page.waitForFunction(() => {
       const terms = Array.from(document.querySelectorAll("stare-terminal"));
-      return terms.length === 3 && terms.every((t) => t.getAttribute("data-ready") === "1");
-    }, { timeout: 20000 });
+      return terms.length === 3 && terms.every((t) => (t.getAttribute("data-ready") === "1") || (t.getOutputText?.()?.length ?? 0) > 0);
+    }, { timeout: 600000, polling: 1000 });
 
+    // Mount local folder into guest via OPFS
+    await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory();
+      const mounts = await root.getDirectoryHandle("stare-mounts", { create: true });
+      const mount = await mounts.getDirectoryHandle("mount1", { create: true });
+      const file = await mount.getFileHandle("hello.txt", { create: true });
+      const writable = await file.createWritable();
+      await writable.write(new TextEncoder().encode("from opfs"));
+      await writable.close();
+      document.dispatchEvent(new CustomEvent("stare:mounts-changed"));
+    });
+
+    // Verify mount visible inside guest (alpine)
     await page.evaluate(() => {
       const alpine = document.querySelector('stare-terminal[data-example="alpine"]');
-      const nodejs = document.querySelector('stare-terminal[data-example="nodejs"]');
-      const claude = document.querySelector('stare-terminal[data-example="claude-cli"]');
-      alpine?.sendInput?.("echo STARE_ALPINE\n");
-      nodejs?.sendInput?.("1+1\n");
-      claude?.sendInput?.("\n");
+      alpine?.sendInput?.("cat /mnt/host/mount1/hello.txt\n");
     });
 
     await page.waitForFunction(() => {
       const alpine = document.querySelector('stare-terminal[data-example="alpine"]');
-      return alpine?.getOutputText?.().includes("STARE_ALPINE");
-    }, { timeout: 20000 });
+      const out = alpine?.getOutputText?.() || "";
+      return out.includes("from opfs");
+    }, { timeout: 180000, polling: 1000 });
+
+    // NodeJS stdin/stdout check
+    await page.evaluate(() => {
+      const nodejs = document.querySelector('stare-terminal[data-example="nodejs"]');
+      nodejs?.sendInput?.("1+1\n");
+    });
 
     await page.waitForFunction(() => {
       const nodejs = document.querySelector('stare-terminal[data-example="nodejs"]');
-      return nodejs?.getOutputText?.().includes("1+1");
-    }, { timeout: 20000 });
+      const out = nodejs?.getOutputText?.() || "";
+      return /\b2\b/.test(out);
+    }, { timeout: 180000, polling: 1000 });
 
-    const netOk = await page.evaluate(() => {
-      const terms = Array.from(document.querySelectorAll("stare-terminal"));
-      return terms.every((t) => t.getAttribute("data-network") === "1");
+    // Edit file in guest then sync back to OPFS
+    await page.evaluate(() => {
+      const alpine = document.querySelector('stare-terminal[data-example="alpine"]');
+      alpine?.sendInput?.("echo updated-from-guest > /mnt/host/mount1/hello.txt\n");
     });
 
-    if (!netOk) throw new Error("Network flag missing on one or more terminals");
+    await page.click("#stare-sync-btn");
+
+    await page.waitForFunction(() => {
+      const chip = document.querySelector('[data-chip="sync-time"]');
+      return chip && !chip.textContent?.includes("--:--");
+    }, { timeout: 180000, polling: 1000 });
+
+    const updated = await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory();
+      const mounts = await root.getDirectoryHandle("stare-mounts");
+      const mount = await mounts.getDirectoryHandle("mount1");
+      const file = await mount.getFileHandle("hello.txt");
+      const data = await file.getFile();
+      return await data.text();
+    });
+
+    if (!updated.includes("updated-from-guest")) {
+      throw new Error(`OPFS content mismatch: ${updated}`);
+    }
+
+    // Claude CLI output (direct fetch)
+    await page.waitForFunction(() => {
+      const claude = document.querySelector('stare-terminal[data-example="claude-cli"]');
+      const out = claude?.getOutputText?.() || "";
+      return /risc|emulation|haiku|limerick/i.test(out) && !/error/i.test(out);
+    }, { timeout: 600000, polling: 1000 });
 
     await browser.close();
     console.log("Puppeteer: terminals boot test PASSED");

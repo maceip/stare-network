@@ -199,7 +199,17 @@ export const bootFriscy = async (
 
   const allowNetwork = cfg.allowNetwork === true;
   const netSab = allowNetwork ? new SharedArrayBuffer(65536) : null;
-  const proxyUrl = `https://${location.hostname}:4433/connect`;
+  const params = new URLSearchParams(location.search);
+  const overrideProxy =
+    (window as any).__STARE_PROXY_URL__ || params.get("proxy");
+  const fallbackProxy = "https://78.141.219.102:4433/connect";
+  const proxyUrl =
+    overrideProxy ||
+    (location.hostname === "127.0.0.1" || location.hostname === "localhost"
+      ? fallbackProxy
+      : `https://${location.hostname}:4433/connect`);
+  const hostFetchProxy =
+    (window as any).__STARE_HOSTFETCH_PROXY__ || params.get("hostFetchProxy");
 
   const controlSab = new SharedArrayBuffer(4096);
   const stdoutSab = new SharedArrayBuffer(65536);
@@ -258,6 +268,7 @@ export const bootFriscy = async (
     controlSab,
     stdoutSab,
     netSab,
+    hostFetchProxy: allowNetwork ? hostFetchProxy ?? null : null,
     allowNetwork,
     allowInsecure: (window as any).__STARE_ALLOW_INSECURE__ === true,
     ...opt,
@@ -328,7 +339,7 @@ export const bootFriscy = async (
     drainStdout();
     checkStdinRequest();
     checkExit();
-  }, 8);
+  }, 16);
 
   hooks.onStatus(`starting:${example}`);
   hooks.onBoot(`boot: launching ${cfg.image} (waiting for stdin)`);

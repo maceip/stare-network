@@ -31,7 +31,7 @@ const CODE_FENCE_DETECT = /```(\\w+)?\\n([\\s\\S]*?)```/;
 
 const ensureHighlightReady = () => {
   if ((window as any).__STARE_TEST_FAST_BOOT__ === true) return;
-  ensureHighlighterReady();
+// Highlighter initialization is triggered lazily when code fences appear.
 };
 
 type ShikiMode = "auto" | "force" | "off";
@@ -119,6 +119,9 @@ const applyHighlight = (text: string) => {
 const applyShikiHighlight = (text: string, mode: ShikiMode) => {
   const shouldRun =
     mode === "force" || (mode === "auto" && hasCodeFence(text));
+  if (shouldRun) {
+    ensureHighlighterReady();
+  }
   const withCode = shouldRun ? renderCodeFences(text) : text;
   return applyHighlight(withCode);
 };
@@ -253,9 +256,12 @@ export const defineHtermElements = () => {
       const backend = this.getAttribute("data-backend") || "local";
       const example = this.getAttribute("data-example") || "alpine";
       const basePath = this.getAttribute("data-base-path") || "/friscy";
+      const bootMode = this.getAttribute("data-boot-mode") || "auto";
       const fastBoot =
         backend === "friscy" &&
-        (window as any).__STARE_TEST_FAST_BOOT__ === true;
+        (bootMode === "fast" ||
+          ((window as any).__STARE_TEST_FAST_BOOT__ === true &&
+            bootMode !== "real"));
 
       if (fastBoot) {
         this.setAttribute("data-ready", "1");
@@ -293,6 +299,8 @@ export const defineHtermElements = () => {
         readyFired = true;
         const io = term.io.push();
         let buffer = "";
+        let pendingStdout = "";
+        let stdoutRaf = 0;
         const basePrint = io.print.bind(io);
         const basePrintln = io.println.bind(io);
         const highlight = (value: string) =>
@@ -306,6 +314,15 @@ export const defineHtermElements = () => {
           const highlighted = highlight(text);
           this._appendOutput(`${highlighted}\n`);
           basePrintln(highlighted);
+        };
+        const flushStdout = () => {
+          stdoutRaf = 0;
+          if (!pendingStdout) return;
+          const chunk = pendingStdout;
+          pendingStdout = "";
+          const highlighted = highlight(chunk);
+          this._appendOutput(highlighted);
+          basePrint(highlighted);
         };
         const attachKeystrokeHandler = (handler: (str: string) => void) => {
           io.onVTKeystroke = (str: string) => {
@@ -400,11 +417,12 @@ export const defineHtermElements = () => {
                 this.setAttribute("data-network", "1");
               }
             },
-              onStdout: (chunk) => {
-              const highlighted = highlight(chunk);
-              this._appendOutput(highlighted);
-              io.print(highlighted);
-              },
+            onStdout: (chunk) => {
+              pendingStdout += chunk;
+              if (!stdoutRaf) {
+                stdoutRaf = requestAnimationFrame(flushStdout);
+              }
+            },
             },
             { example, basePath },
           )
